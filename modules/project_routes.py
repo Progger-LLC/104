@@ -1,56 +1,51 @@
 import os
+import shutil
 import yaml
-import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+import logging
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
 def repair_project_config() -> None:
-    """Repair the project.yaml configuration file."""
-    project_yaml_path = 'project.yaml'
-    backup_path = f'project_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.yaml'
-    
-    # Create a backup
+    """Repair project.yaml configuration issues."""
+    project_yaml_path = "project.yaml"
+    backup_path = f"project_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.yaml"
+
+    # Step 1: Create a backup if project.yaml exists
     if os.path.exists(project_yaml_path):
-        os.rename(project_yaml_path, backup_path)
-        logger.info(f'Backup created at {backup_path}')
-    
-    # Default configuration
+        shutil.copyfile(project_yaml_path, backup_path)
+        logger.info(f"Backup created at {backup_path}")
+    else:
+        logger.warning("project.yaml does not exist. Creating a new one.")
+
+    # Step 2: Prepare default configuration
     default_config = {
         "entry_point": "main.py",
-        "dependencies": {
-            "fastapi": "0.104.1",
-            "uvicorn": "0.24.0",
-            "pydantic": "2.5.0",
-            "sqlalchemy": "2.0.23",
-            "pytest": "7.4.3"
-        },
-        "template_version": "1.0.0"  # Example version, adjust as necessary
+        "dependencies": {},
+        "template_version": "1.0",
+        "ports": {
+            "http": 8000
+        }
     }
 
-    # Write the new config
+    # Step 3: Validate existing project.yaml or create a new one
     try:
-        with open(project_yaml_path, 'w') as file:
-            yaml.dump(default_config, file)
-            logger.info(f'project.yaml created with default settings.')
-    except Exception as e:
-        logger.error(f'Error writing to project.yaml: {e}')
-        # Restore from backup if writing fails
-        if os.path.exists(backup_path):
-            os.rename(backup_path, project_yaml_path)
-            logger.info('Restored project.yaml from backup.')
-        raise
+        if os.path.exists(project_yaml_path):
+            with open(project_yaml_path, 'r') as file:
+                config = yaml.safe_load(file) or {}
+            # Merge with default config
+            config = {**default_config, **config}
+        else:
+            config = default_config
 
-    # Validate the created YAML
-    try:
-        with open(project_yaml_path, 'r') as file:
-            content = yaml.safe_load(file)
-            if not isinstance(content, dict):
-                raise ValueError("YAML content is not valid")
+        # Step 4: Validate and write back the project.yaml
+        with open(project_yaml_path, 'w') as file:
+            yaml.safe_dump(config, file)
+        logger.info("project.yaml has been repaired/created successfully.")
     except Exception as e:
-        logger.error(f'Error validating project.yaml: {e}')
+        # Restore from backup if there's an error
         if os.path.exists(backup_path):
-            os.rename(backup_path, project_yaml_path)
-            logger.info('Restored project.yaml from backup.')
-        raise
+            shutil.copyfile(backup_path, project_yaml_path)
+            logger.error("Error occurred while repairing project.yaml. Restored from backup.")
+        raise e
