@@ -1,30 +1,26 @@
 import pytest
 import os
-import yaml
+import shutil
 from modules.project_routes import repair_project_config
 
-def test_repair_project_config_creates_file():
-    """Test that repair_project_config creates project.yaml."""
-    if os.path.exists('project.yaml'):
-        os.remove('project.yaml')
-    
+@pytest.fixture
+def setup_temp_yaml(tmp_path):
+    """Fixture to set up a temporary project.yaml for testing."""
+    yaml_file = tmp_path / "project.yaml"
+    yaml_file.write_text("entry_point: old_entry.py")
+    yield yaml_file
+    os.remove(yaml_file)
+
+def test_repair_project_yaml_creates_file(setup_temp_yaml):
+    """Test that repair_project_config creates or repairs project.yaml."""
     repair_project_config()
+    assert os.path.exists("project.yaml")
+    with open("project.yaml", 'r') as file:
+        content = file.read()
+    assert "entry_point: old_entry.py" in content  # Should keep existing entry_point
+    assert "template_version: 1.0" in content  # Should add default version
 
-    assert os.path.exists('project.yaml'), "project.yaml should be created"
-    
-    # Validate the content of project.yaml
-    with open('project.yaml', 'r') as file:
-        content = yaml.safe_load(file)
-        assert "entry_point" in content, "entry_point should be present"
-        assert "dependencies" in content, "dependencies should be present"
-        assert content["entry_point"] == "main.py", "entry_point should be main.py"
-
-def test_repair_project_config_creates_backup():
-    """Test that a backup is created when project.yaml exists."""
-    with open('project.yaml', 'w') as file:
-        file.write('dummy: value')
-
+def test_backup_creation(setup_temp_yaml):
+    """Test that a backup is created before changes are made."""
     repair_project_config()
-
-    backup_files = [f for f in os.listdir() if f.startswith('project_backup_')]
-    assert backup_files, "Backup file should be created"
+    assert os.path.exists("project_backup_*.yaml")  # Check for backup creation
