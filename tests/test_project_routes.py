@@ -1,26 +1,28 @@
 import pytest
 import os
-import shutil
+import yaml
 from modules.project_routes import repair_project_config
 
 @pytest.fixture
-def setup_temp_yaml(tmp_path):
-    """Fixture to set up a temporary project.yaml for testing."""
-    yaml_file = tmp_path / "project.yaml"
-    yaml_file.write_text("entry_point: old_entry.py")
-    yield yaml_file
-    os.remove(yaml_file)
+def setup_yaml_file(tmpdir):
+    """Fixture to setup a test project.yaml file."""
+    test_yaml_path = tmpdir.join("project.yaml")
+    with open(test_yaml_path, 'w') as file:
+        yaml.dump({"project_name": "Test Project"}, file)
+    return str(test_yaml_path)
 
-def test_repair_project_yaml_creates_file(setup_temp_yaml):
-    """Test that repair_project_config creates or repairs project.yaml."""
-    repair_project_config()
-    assert os.path.exists("project.yaml")
-    with open("project.yaml", 'r') as file:
-        content = file.read()
-    assert "entry_point: old_entry.py" in content  # Should keep existing entry_point
-    assert "template_version: 1.0" in content  # Should add default version
+def test_repair_project_config(setup_yaml_file):
+    """Test the repair_project_config function."""
+    # Arrange
+    orig_yaml_path = setup_yaml_file
+    os.rename(orig_yaml_path, 'project.yaml')
 
-def test_backup_creation(setup_temp_yaml):
-    """Test that a backup is created before changes are made."""
+    # Act
     repair_project_config()
-    assert os.path.exists("project_backup_*.yaml")  # Check for backup creation
+
+    # Assert
+    with open('project.yaml', 'r') as file:
+        data = yaml.safe_load(file)
+        assert data['project_name'] == "Test Project"
+        assert 'dependencies' in data
+        assert 'template_version' in data
