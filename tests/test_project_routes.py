@@ -3,26 +3,31 @@ import os
 import yaml
 from modules.project_routes import repair_project_config
 
-@pytest.fixture
-def setup_yaml_file(tmpdir):
-    """Fixture to setup a test project.yaml file."""
-    test_yaml_path = tmpdir.join("project.yaml")
-    with open(test_yaml_path, 'w') as file:
-        yaml.dump({"project_name": "Test Project"}, file)
-    return str(test_yaml_path)
+def test_repair_project_config_creates_backup(tmp_path):
+    """Test that a backup file is created before changes."""
+    # Setup a sample project.yaml file
+    project_yaml_path = tmp_path / "project.yaml"
+    project_yaml_path.write_text("dependencies:\n  - fastapi\n")
 
-def test_repair_project_config(setup_yaml_file):
-    """Test the repair_project_config function."""
-    # Arrange
-    orig_yaml_path = setup_yaml_file
-    os.rename(orig_yaml_path, 'project.yaml')
+    # Perform the repair
+    repair_project_config(str(project_yaml_path))
 
-    # Act
-    repair_project_config()
+    # Check that a backup file was created
+    backup_files = list(tmp_path.glob("project.yaml.*.bak"))
+    assert len(backup_files) == 1
 
-    # Assert
-    with open('project.yaml', 'r') as file:
-        data = yaml.safe_load(file)
-        assert data['project_name'] == "Test Project"
-        assert 'dependencies' in data
-        assert 'template_version' in data
+def test_repair_project_config_fix_yaml(tmp_path):
+    """Test that the function fixes YAML issues and adds missing fields."""
+    project_yaml_path = tmp_path / "project.yaml"
+    project_yaml_path.write_text("dependencies: \n  - fastapi\n")
+
+    # Perform the repair
+    repair_project_config(str(project_yaml_path))
+
+    # Check the contents of the repaired file
+    with open(project_yaml_path, 'r') as file:
+        config = yaml.safe_load(file)
+
+    assert 'dependencies' in config
+    assert 'template_version' in config
+    assert config['template_version'] == '1.0.0'  # Default version
