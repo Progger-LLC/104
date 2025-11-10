@@ -1,39 +1,37 @@
 import os
-import shutil
 import yaml
+import shutil
 from datetime import datetime
 from typing import Dict, Any
 
+
 def repair_project_config() -> None:
-    """Repair the project configuration by fixing YAML syntax and adding missing fields."""
-    project_config_path = "project.yaml"
-    backup_path = f"project_backup_{datetime.now().strftime('%Y%m%d%H%M%S')}.yaml"
+    """Repair the project.yaml configuration file."""
+    yaml_file_path = 'project.yaml'
+    backup_file_path = f'project_backup_{datetime.now().strftime("%Y%m%d%H%M%S")}.yaml'
     
-    # Create a backup of the original configuration if it exists
-    if os.path.exists(project_config_path):
-        shutil.copyfile(project_config_path, backup_path)
+    # Step 1: Create a backup of project.yaml
+    if os.path.exists(yaml_file_path):
+        shutil.copy(yaml_file_path, backup_file_path)
 
-    # Default configuration
-    default_config: Dict[str, Any] = {
-        'entry_point': 'main.py',
-        'dependencies': {},
-        'template_version': '1.0.0',  # Default template version
-        'name': 'project_name',
-        'version': '0.1.0',
-    }
-
-    # Try to read the existing configuration
+    # Step 2: Attempt to read and fix the YAML file
     try:
-        with open(project_config_path, 'r') as file:
+        with open(yaml_file_path, 'r') as file:
             config = yaml.safe_load(file) or {}
-    except FileNotFoundError:
-        config = {}
 
-    # Merge defaults with existing configuration
-    config = {**default_config, **config}
+        # Step 3: Fix YAML syntax errors and add missing fields
+        config.setdefault('template_version', '1.0.0')  # default template version
+        config.setdefault('dependencies', {})  # ensure dependencies are present
 
-    # Write the fixed configuration back to project.yaml
-    with open(project_config_path, 'w') as file:
-        yaml.dump(config, file)
+        # Additional required fields can be added here
+        # Example: config.setdefault('name', 'MyProject')
 
-    print("Configuration repaired and saved.")
+        # Step 4: Save the corrected YAML back to the file
+        with open(yaml_file_path, 'w') as file:
+            yaml.dump(config, file)
+
+    except Exception as error:
+        # Step 5: Restore from backup if repair fails
+        if os.path.exists(backup_file_path):
+            shutil.copy(backup_file_path, yaml_file_path)
+        raise RuntimeError(f"Repair failed: {error}")

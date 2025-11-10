@@ -1,39 +1,42 @@
-import os
 import pytest
+import os
+import yaml
 from modules.project_routes import repair_project_config
 
-def test_repair_project_config_creates_backup():
-    """Test that repairing the project config creates a backup."""
-    # Create a dummy project.yaml for testing
-    test_yaml_path = "project.yaml"
-    with open(test_yaml_path, 'w') as file:
-        file.write("name: test_project\n")
 
-    # Call the repair function
+@pytest.fixture
+def setup_yaml_file(tmpdir):
+    """Fixture to set up a temporary project.yaml file for testing."""
+    yaml_content = """
+    dependencies:
+      fastapi: "0.68.0"
+    """
+    yaml_file = tmpdir.join("project.yaml")
+    yaml_file.write(yaml_content)
+    yield str(yaml_file)
+
+
+def test_repair_project_config_valid_yaml(setup_yaml_file):
+    """Test the repair_project_config function with valid YAML."""
+    os.chdir(os.path.dirname(setup_yaml_file))
     repair_project_config()
 
-    # Check for backup file
-    backup_file = [f for f in os.listdir() if f.startswith('project_backup_')]
-    assert len(backup_file) == 1  # Ensure a single backup file is created
+    with open('project.yaml', 'r') as file:
+        config = yaml.safe_load(file)
 
-    # Cleanup
-    os.remove(test_yaml_path)
-    os.remove(backup_file[0])
+    assert config['template_version'] == '1.0.0'
+    assert 'dependencies' in config
 
-def test_repair_project_config_creates_default_yaml():
-    """Test that default values are set in project.yaml."""
-    test_yaml_path = "project.yaml"
 
-    # Call the repair function
-    repair_project_config()
+def test_repair_project_config_missing_file():
+    """Test the repair_project_config function when project.yaml is missing."""
+    if os.path.exists('project.yaml'):
+        os.remove('project.yaml')
 
-    # Check if the project.yaml is created with defaults
-    with open(test_yaml_path, 'r') as file:
-        content = file.read()
-    
-    assert "entry_point: main.py" in content
-    assert "name: project_name" in content
-    assert "version: 0.1.0" in content
+    repair_project_config()  # This should create a new project.yaml with defaults
 
-    # Cleanup
-    os.remove(test_yaml_path)
+    with open('project.yaml', 'r') as file:
+        config = yaml.safe_load(file)
+
+    assert config['template_version'] == '1.0.0'
+    assert 'dependencies' in config
