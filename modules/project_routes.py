@@ -1,47 +1,49 @@
 import os
 import shutil
-import time
 import yaml
-from typing import Optional, Dict
+import logging
+from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 def repair_project_config() -> None:
-    """Repair the project.yaml configuration file by creating a backup, fixing syntax errors,
-    and adding missing required fields."""
-    
-    project_file = "project.yaml"
-    backup_file = f"{project_file}.{int(time.time())}.bak"
-    
-    # Step 1: Create a backup
-    shutil.copyfile(project_file, backup_file)
-    
-    try:
-        with open(project_file, 'r') as file:
-            config = yaml.safe_load(file)
-        
-        # Step 2: Fix issues and ensure all required fields are present
-        if config is None:
-            config = {}
+    """Repair the project.yaml configuration file."""
+    project_yaml_path = "project.yaml"
+    backup_path = f"{project_yaml_path}.{int(time.time())}.bak"
 
-        # Step 3: Set default values
-        required_fields = {
-            'template_version': '1.0.0',  # default value
-            'dependencies': {}
-        }
-        
-        # Add missing fields with defaults
-        for field, default in required_fields.items():
-            if field not in config:
-                config[field] = default
-        
-        # Step 4: Validate dependencies formatting
-        if 'dependencies' not in config or not isinstance(config['dependencies'], dict):
-            config['dependencies'] = {}
-        
-        # Step 5: Write the updated config back to the file
-        with open(project_file, 'w') as file:
-            yaml.dump(config, file)
-    
+    # Step 1: Create a timestamped backup of project.yaml
+    shutil.copyfile(project_yaml_path, backup_path)
+    logger.info(f"Backup created at {backup_path}")
+
+    try:
+        # Step 2: Load the existing YAML file
+        with open(project_yaml_path, 'r') as file:
+            config = yaml.safe_load(file) or {}
+
+        # Step 3: Add missing required fields with sensible defaults
+        if 'template_version' not in config:
+            config['template_version'] = "1.0.0"  # default value
+            logger.info("Added missing 'template_version' field.")
+
+        # Additional validation and fixing could be added here
+
+        # Step 4: Validate the dependencies format
+        if 'dependencies' in config:
+            # Ensure dependencies are properly formatted (list or dict)
+            if not isinstance(config['dependencies'], dict):
+                raise ValueError("Dependencies must be a dictionary.")
+
+        # Step 5: Write the fixed configuration back to project.yaml
+        with open(project_yaml_path, 'w') as file:
+            yaml.safe_dump(config, file)
+        logger.info("project.yaml updated successfully.")
+
     except Exception as e:
-        # Restore from backup if repair fails
-        shutil.copyfile(backup_file, project_file)
-        raise e
+        logger.error(f"Error repairing project.yaml: {e}")
+        # Step 6: Restore from backup if repair fails
+        shutil.copyfile(backup_path, project_yaml_path)
+        logger.info("Restored project.yaml from backup.")
+    finally:
+        # Clean up backup file if not needed
+        if os.path.exists(backup_path):
+            os.remove(backup_path)
