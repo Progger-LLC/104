@@ -1,45 +1,62 @@
 import os
-import shutil
 import yaml
+import json
+import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 def repair_project_config() -> None:
-    """Repair the project.yaml configuration file.
-
-    This function will create a backup of the project.yaml file, fix 
-    any issues with the YAML syntax, add missing fields, and restore 
-    from backup if repairs fail.
-    """
-    project_yaml_path = "project.yaml"
-    backup_path = f"project.yaml.bak.{datetime.now().strftime('%Y%m%d%H%M%S')}"
-
-    # Step 1: Create a backup of project.yaml
-    shutil.copyfile(project_yaml_path, backup_path)
-
+    """Repair the project.yaml configuration file."""
+    project_yaml_path = 'project.yaml'
+    backup_path = create_backup(project_yaml_path)
+    
     try:
-        # Step 2: Load the YAML file
-        with open(project_yaml_path, 'r') as f:
-            config: Dict[str, Any] = yaml.safe_load(f) or {}
+        with open(project_yaml_path, 'r') as file:
+            project_config = yaml.safe_load(file) or {}
 
-        # Step 3: Fix issues and add required fields
-        if 'template_version' not in config:
-            config['template_version'] = "1.0.0"  # Default version
+        # Fixing required fields
+        if 'template_version' not in project_config:
+            project_config['template_version'] = infer_template_version()
 
-        # Validate and reformat dependencies
-        if 'dependencies' in config and isinstance(config['dependencies'], dict):
-            config['dependencies'] = {k: str(v) for k, v in config['dependencies'].items()}
+        # Validate and fix syntax errors
+        validate_dependencies(project_config)
 
-        # Step 4: Write the updated config back to the YAML file
-        with open(project_yaml_path, 'w') as f:
-            yaml.dump(config, f)
+        # Write back the updated configuration
+        with open(project_yaml_path, 'w') as file:
+            yaml.dump(project_config, file)
 
     except Exception as e:
-        # Step 5: Restore from backup if repair fails
-        shutil.copyfile(backup_path, project_yaml_path)
-        raise e  # Raise the original exception
+        logger.error(f"Failed to repair project.yaml: {e}. Restoring backup.")
+        restore_backup(backup_path, project_yaml_path)
+        raise
 
-    finally:
-        # Cleanup backup file
-        if os.path.exists(backup_path):
-            os.remove(backup_path)
+def create_backup(file_path: str) -> str:
+    """Create a timestamped backup of the specified file."""
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_path = f"{file_path}.{timestamp}.bak"
+    os.rename(file_path, backup_path)
+    logger.info(f"Backup created: {backup_path}")
+    return backup_path
+
+def restore_backup(backup_path: str, original_path: str) -> None:
+    """Restore the original file from backup."""
+    os.rename(backup_path, original_path)
+    logger.info(f"Restored backup from {backup_path} to {original_path}")
+
+def infer_template_version() -> str:
+    """Infer the template version from templates.json if available."""
+    try:
+        with open('templates.json', 'r') as file:
+            templates = json.load(file)
+            return templates.get('default_template_version', '1.0.0')  # Default version
+    except FileNotFoundError:
+        logger.warning("templates.json not found, using default version.")
+        return '1.0.0'  # Default version if file is not found
+
+def validate_dependencies(config: Dict[str, Any]) -> None:
+    """Validate dependencies format in the project configuration."""
+    if 'dependencies' in config and not isinstance(config['dependencies'], dict):
+        logger.error("Dependencies must be formatted as a dictionary.")
+        raise ValueError("Invalid format for dependencies.")
