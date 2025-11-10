@@ -1,0 +1,40 @@
+# Project Configuration
+# Auto-generated for Project 104
+
+name: 104
+template: fastapi-rest-api
+template_version: 1.1.0
+version: 1.0.0
+python_version: "3.11"
+entry_point: main.py
+
+# Dependencies
+dependencies:
+  fastapi: "0.104.1"
+  uvicorn: "0.24.0"
+  sqlalchemy: "2.0.23"
+  psycopg2-binary: "2.9.9"
+  python-dotenv: "1.0.0"
+  pydantic: "2.5.0"
+
+# Services
+services:
+  - postgres
+
+# Ports
+ports:
+  - 8000
+
+# Health Check
+healthcheck:
+  endpoint: /health
+  interval: 30s
+  timeout: 10s
+  retries: 3
+
+# Runtime
+runtime:
+  type: uvicorn
+  command: python main.py
+  container: true
+  auto_reload: true
