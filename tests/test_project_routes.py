@@ -1,33 +1,36 @@
 import pytest
 import os
+import shutil
 import yaml
 from modules.project_routes import repair_project_config
 
-def test_repair_project_config_creates_backup(tmp_path):
-    """Test that a backup file is created before changes."""
-    # Setup a sample project.yaml file
-    project_yaml_path = tmp_path / "project.yaml"
-    project_yaml_path.write_text("dependencies:\n  - fastapi\n")
+@pytest.fixture
+def setup_project_yaml(tmp_path):
+    """Fixture to set up a temporary project.yaml for testing."""
+    project_yaml = tmp_path / "project.yaml"
+    with open(project_yaml, 'w') as file:
+        yaml.dump({'dependencies': {'fastapi': '0.104.1'}}, file)
+    yield project_yaml
+    os.remove(project_yaml)
 
-    # Perform the repair
-    repair_project_config(str(project_yaml_path))
+def test_repair_project_yaml_valid(setup_project_yaml):
+    """Test that repair_project_config fixes a valid project.yaml."""
+    # Modifying the file to introduce an error
+    with open(setup_project_yaml, 'a') as file:
+        file.write("malformed_yaml: [")
 
-    # Check that a backup file was created
-    backup_files = list(tmp_path.glob("project.yaml.*.bak"))
-    assert len(backup_files) == 1
-
-def test_repair_project_config_fix_yaml(tmp_path):
-    """Test that the function fixes YAML issues and adds missing fields."""
-    project_yaml_path = tmp_path / "project.yaml"
-    project_yaml_path.write_text("dependencies: \n  - fastapi\n")
-
-    # Perform the repair
-    repair_project_config(str(project_yaml_path))
-
-    # Check the contents of the repaired file
-    with open(project_yaml_path, 'r') as file:
+    repair_project_config()
+    
+    with open(setup_project_yaml, 'r') as file:
         config = yaml.safe_load(file)
 
     assert 'dependencies' in config
-    assert 'template_version' in config
-    assert config['template_version'] == '1.0.0'  # Default version
+    assert config['template_version'] == "v1.0.0"  # Check for default value
+
+def test_backup_creation(setup_project_yaml):
+    """Test that a backup is created before changes."""
+    backup_file = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.yaml"
+    repair_project_config()
+    
+    assert os.path.exists(backup_file)
+    os.remove(backup_file)
